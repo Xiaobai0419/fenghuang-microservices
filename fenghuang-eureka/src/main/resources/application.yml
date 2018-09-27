@@ -1,0 +1,10 @@
+name:
+    LiLei-Loves-HanMeimei
+my:
+  servers:
+      - dev.example.com
+      - another.example.com
+spring:
+  profiles:
+    active: server1
+

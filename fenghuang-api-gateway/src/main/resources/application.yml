@@ -1,0 +1,75 @@
+#eureka:
+#  instance:
+#    hostname: localhost
+#  client:
+#    serviceUrl:
+#      defaultZone: http://localhost:8761/eureka/,http://localhost:8762/eureka/,http://localhost:8763/eureka/
+server:
+  port: 8768
+spring:
+  application:
+    name: api-gateway
+zuul:
+  routes:
+#    # 面向服务的路由 需要api网关注册到中心获取（服务发现机制获取实例），支持相同服务（同一个serviceId）部署多个实例（服务高可用）
+#    api-a:
+#      path: /api/service-a/**
+#      serviceId: service-main-ui
+#    # 传统的路由 直接转到服务url地址（理论上不需要注册中心）
+#    api-b-url:
+#      path: /api/service-a-url/**
+#      url: http://localhost:8766/
+    api-b-url:
+      path: /api/service-a-url/**
+      url: http://localhost:8765/
+#      url: http://sso-resource:8085/resource #资源服务器无法在认证后直接路由，只能通过OAuth2RestTemplate（带有认证过的SSO客户端信息）访问
+# 我们的网关被设计成一个SSO客户端，与资源服务器无关。网关路由url属于网关本身的资源，
+# 所以这里相当于我们将网关加了一个SSO认证体系，访问网关的任何资源时都会导向认证服务器，
+# 在认证成功后，直接可以通过网关路由，访问到其他服务器，达到通过网关实现单点登录
+# 但这里尚存越过网关，直接访问其他服务器，可直接获取资源的问题，除非每台服务器都部署为一个资源服务器，
+# 配置在同一台认证服务器认证后获取
+# 但如果这样允许每台服务器都作为资源服务器，通过认证服务器认证后获取，网关就失去了其统一入口的作用
+# 经尝试，将加了SSO客户端的网关的路由url,配置成使用同一台认证服务器的一个资源服务器路径，即使认证成功也无权限
+# 访问资源服务器的任何资源，
+# 因为走到路由时网关自身的认证过程已完成，路由走的是被认证成功后网关自己的资源，
+# 要想访问资源服务器的资源，需要使用OAuth2RestTemplate（网关有了SSO客户端配置后，这个Bean可直接注入获取），
+# 如该网关中ApiGatewayResourceController中的调用方法
+# 当然，你同样可以访问网关自己的资源/user，和网关路由资源/api/service-a-url/**
+# 所以网关路由认证和资源服务器访问认证是不可融合的两种方式，
+# 前者可实现网关功能和网关统一登录认证，在网关登录认证服务器后就可通过网关访问任何资源，
+# 后者则需要在每个服务端点上部署资源服务器（通过使用@EnableResourceServer和yml配置连接认证服务器）和每个资源的具体权限配置（通过继承了ResourceServerConfigurerAdapter的Bean），连接到统一的认证服务器，
+# 网关退化成SSO客户端，如果其仍作为统一登录、访问入口，则配置路由无效，
+# 只能通过OAuth2RestTemplate（带有认证过的SSO客户端信息）来访问每个资源服务器（验证来自同一个认证服务器的OAuth2RestTemplate已认证客户端信息），
+# 这样就只能在网关中手动通过一个@RestController配置所有资源的网关访问路径，通过OAuth2RestTemplate.getForObject(url)的方式访问每个服务器的资源，如该网关中ApiGatewayResourceController中的调用方法
+# 无法通过yml中的zuul.routes配置路由整个服务器
+
+
+#auth-server: http://sso-login:8767 # sso-server地址
+auth-server: http://sso-login:8082/uaa # sso-server地址
+security:
+  oauth2:
+    client:
+#      client-id: client
+#      client-secret: secret
+      client-id: merryyou1
+      client-secret: merryyousecrect1
+      user-authorization-uri: ${auth-server}/oauth/authorize #请求认证的地址
+      access-token-uri: ${auth-server}/oauth/token #请求令牌的地址
+    resource:
+      jwt:
+        key-uri: ${auth-server}/oauth/token_key #解析jwt令牌所需要密钥的地址
+messages:
+  url: http://sso-resource:8085
+
+#不允许使用tab在每一个yml层级上缩进！！要使用空格！！
+#在上面的配置文件文件中，使用两种路由规则的配置方法，一种是面向服务的，一种是使用传统的url。
+#所有符合/api/service-a/**的请求都将转发到service-main-ui，同样所有符合/api/service-a-url/**的请求都将转发到
+#http://localhost:8766/，也就是前面使用的service-main-ui。两种规则的配置很明显：面向服务的
+#使用serviceId配置服务实例，而传统的直接使用服务的地址。
+
+#路径匹配规则
+#通配符	含义	url	说明
+#？	匹配任意单个字符	/feign/?	匹配/feign/之后拼接一个任意字符的路径，如/feign/a
+#*	匹配任意数量的字符	/feign/*	匹配/feign/之后拼接任意字符的路径，如/feign/aaa
+#**	匹配任意数量的字符，支持多级目录	/feign/**	可以匹配/feign/*包含的内容之外，还可匹配形如/feign/a/b的多级目录
+
